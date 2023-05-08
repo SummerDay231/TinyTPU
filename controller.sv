@@ -17,7 +17,7 @@ module  controller  (
     input          compute_finished,
 
     output [7:0] pc,
-    output [3:0 ] cs,
+    output [3:0] cs,
     output [5:0] addr1,
     output [5:0] addr2,
     output [5:0] addr_result,
@@ -31,7 +31,7 @@ module  controller  (
     //machine state decode
     parameter            READ_INSTR   = 4'd0 ;
     parameter            INSTR_DOCODE  = 4'd1 ;
-    parameter            INSTR_DOCODE_POST  = 4'd2 ;
+    parameter            INSTR_DECODE_POST  = 4'd2 ;
     parameter            PRE_LOAD  = 4'd3 ;
     parameter            PE_COMP =4'd4;
     parameter            ELECOMP_W2SHM = 4'd5 ;
@@ -56,15 +56,15 @@ module  controller  (
     assign pc=pc_reg;
     assign addr1=addr1_reg;
     assign addr2=addr2_reg;
-    assign result_addr= result_addr_reg;
-    assign cs =st_cur;
+    assign addr_result=result_addr_reg;
+    assign cs=st_cur;
     
     always@(posedge clk or negedge reset) begin
         if(!reset) begin 
             source_reg<=0;
         end
         else begin
-            if(st_cur==INSTR_DOCODE_POST)begin
+            if(st_cur==INSTR_DECODE_POST)begin
                 if(rs1[9:6]==4'b0001) source_reg<=1;
                 else if(rs1[9:6]==4'b0010) source_reg<=2;
                 else if(rs1[9:6]==4'b0100) source_reg<=3;
@@ -72,12 +72,13 @@ module  controller  (
 
         end
     end
-        always@(posedge clk or negedge reset) begin
+
+    always@(posedge clk or negedge reset) begin
         if(!reset) begin 
             target_reg<=0;
         end
         else begin
-            if(st_cur==INSTR_DOCODE_POST)begin
+            if(st_cur==INSTR_DECODE_POST)begin
                 if(rs2[9:6]==4'b0001) target_reg<=1;
                 else if(rs2[9:6]==4'b0010) target_reg<=2;
                 else if(rs2[9:6]==4'b0100)  target_reg<=3;
@@ -89,12 +90,13 @@ module  controller  (
     always@(posedge clk or negedge reset)begin
         if(!reset) pc_reg<=0;
         else begin
-            if({func,opcode} !=8'b1111_1111 && st_cur==INSTR_DOCODE_POST)
+            if({func,opcode} !=8'b1111_1111 && st_cur==INSTR_DECODE_POST)
                 pc_reg<=pc_reg+1;
             else 
                 pc_reg<=pc_reg;
         end
     end
+
     always @(posedge clk or negedge reset) begin
         if(!reset) preload_cnt<=0;
         else begin
@@ -104,6 +106,7 @@ module  controller  (
             end
         end
     end
+
     always @(posedge clk or negedge reset) begin
         if(!reset) move_cnt<=0;
         else begin
@@ -113,6 +116,7 @@ module  controller  (
             end
         end
     end
+
     always @(posedge clk or negedge reset) begin
         if(!reset) write_cnt<=0;
         else begin
@@ -122,12 +126,7 @@ module  controller  (
             end
         end
     end
-    always @(posedge clk or negedge reset) begin
-        if(!reset) result_addr_reg<=0;
-        else begin
-            if(st_cur==PRE_LOAD) result_addr_reg<=rs2[5:0];
-        end 
-    end
+
     always @(posedge clk or negedge reset) begin
         if(!reset) result_addr_reg<=0;
         else begin
@@ -136,24 +135,24 @@ module  controller  (
                 result_addr_reg<=result_addr_reg+1;
         end 
     end
+
     always @(posedge clk or negedge reset) begin
         if(!reset) addr1_reg<=0;
         else begin
-            if(st_cur==INSTR_DOCODE_POST) addr1_reg<=rs1[5:0];
+            if(st_cur==INSTR_DECODE_POST) addr1_reg<=rs1[5:0];
             else if(st_cur==MOVE && move_cnt<4) addr1_reg<=addr1_reg+1;
             else if(st_cur==PRE_LOAD && preload_cnt<4) addr1_reg<=addr1_reg+1;
-            
-        end 
-    end
-    always @(posedge clk or negedge reset) begin
-        if(!reset) addr2_reg<=0;
-        else begin
-            if(st_cur==INSTR_DOCODE_POST) addr2_reg<=rs2[5:0];
-            else if(st_cur==MOVE && move_cnt>=1) addr1_reg<=addr1_reg+1;
-            else if(st_cur==PRE_LOAD && preload_cnt>=1) addr2_reg<=addr2_reg+1;
         end 
     end
 
+    always @(posedge clk or negedge reset) begin
+        if(!reset) addr2_reg<=0;
+        else begin
+            if(st_cur==INSTR_DECODE_POST) addr2_reg<=rs2[5:0];
+            else if(st_cur==MOVE && move_cnt>=1) addr2_reg<=addr2_reg+1;
+            else if(st_cur==PRE_LOAD && preload_cnt>=1) addr2_reg<=addr2_reg+1;
+        end 
+    end
 
     //(1) state transfer
     always @(posedge clk or negedge reset) begin
@@ -164,6 +163,7 @@ module  controller  (
             st_cur      <= st_next ;
         end
     end
+
     //(2) state switch, using block assignment for combination-logic   
     always @(*) begin
         st_next = st_cur ;
@@ -175,9 +175,9 @@ module  controller  (
                 st_next= INSTR_DOCODE;
             end
             INSTR_DOCODE:begin
-                st_next=INSTR_DOCODE_POST;
+                st_next=INSTR_DECODE_POST;
             end
-            INSTR_DOCODE_POST: begin 
+            INSTR_DECODE_POST: begin 
                 case({func,opcode})
                     8'b00010010:st_next=PRE_LOAD;
                     8'b00100010:st_next=PRE_LOAD;
@@ -209,8 +209,6 @@ module  controller  (
     end
 
     //(3) output logic
-
-
     reg [1:0]         reg_SHM_en ;     // shared_memory ren & wen
     always @(*) begin
         reg_SHM_en=2'b0;
@@ -228,12 +226,6 @@ module  controller  (
         end
     end
 
-
-
-
-
-
-
     reg [1:0]         reg_INBUF_en ;   // input buffer ren & wen
     always @ (*) begin
          reg_INBUF_en=2'b0;
@@ -246,11 +238,6 @@ module  controller  (
             reg_INBUF_en=2'b10;
         end
     end
-
-
-
-
-
 
     reg [1:0]         reg_WBUF_en ;     // weight buffer ren & wen
     always @(*) begin
@@ -265,9 +252,6 @@ module  controller  (
         end
     end
 
-
-
-
     reg [1:0]         reg_PEARRAY_en ;     // PE pen & cen
     always @(*) begin
         reg_PEARRAY_en=2'b0;
@@ -279,8 +263,6 @@ module  controller  (
         end
     end
 
-
-
     reg               reg_ELEARRAY_en;    // elementwise array en
     always @(*) begin
         if(st_cur==ELECOMP_W2SHM && write_cnt<4)
@@ -288,9 +270,6 @@ module  controller  (
         else 
             reg_ELEARRAY_en=1'b0;
     end
-
-
-
 
     reg               reg_INSBUF_en;    // instruction buffer ren
     always @(*) begin
@@ -302,7 +281,6 @@ module  controller  (
 
     end
 
-
     reg               reg_DECODER_en;    
     always @(*) begin
 
@@ -311,9 +289,6 @@ module  controller  (
             else 
                 reg_DECODER_en=1'b0;
     end
-
-
-
 
     assign    SHM_en      =  reg_SHM_en ;
     assign    INBUF_en    =  reg_INBUF_en ;

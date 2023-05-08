@@ -32,7 +32,7 @@ module top
     wire start;
     wire compute_finished;
     
-    wire [3:0 ] cs; 
+    wire [3:0 ] cs;          // controller sign
     wire [5:0] addr1;
     wire [5:0] addr2;
     wire [5:0] addr_result;
@@ -124,7 +124,8 @@ decoder decoder_du
     .opcode(opcode)
     );
 
-controller controller_du (
+controller controller_du 
+(
     .clk(clk),
     .reset(reset),
     .start(start),    
@@ -150,6 +151,7 @@ controller controller_du (
     .source(source),
     .target(target)
     );
+
  elementwise_array  #( 4) elementwise_array_du
 (
 	// interface to system
@@ -163,7 +165,7 @@ controller controller_du (
 
 	);
 
-    PE_array #( 4)PE_array_du
+PE_array #( 4)PE_array_du
 (
 	// interface to system
     .clk(clk),
@@ -179,7 +181,8 @@ controller controller_du (
     .compute_finished(compute_finished)
 
 	);
-    weight_buffer #(8)weight_buffer_du
+
+weight_buffer #(8)weight_buffer_du
 (
     .q(weight_buffer_q),
     .clk(clk),
@@ -189,6 +192,7 @@ controller controller_du (
     .a(weight_buffer_a),
     .d(weight_buffer_d)
     );
+
 shared_memory #(64)shared_memory_du
 (
     .q(shared_memory_q),
@@ -199,14 +203,16 @@ shared_memory #(64)shared_memory_du
     .a(shared_memory_a),
     .d(shared_memory_d)
     );
+
 instruction_buffer  #(256)instruction_buffer_du
 (
    .q(instruction),
     .clk(clk),
     .reset(reset),
-    .ren(INBUF_en[1]),
+    .ren(INSBUF_en),
     .a(pc)
     );
+
  input_buffer  #( 8)input_buffer_du
 (
     .q(input_buffer_q),
